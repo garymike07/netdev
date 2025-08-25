@@ -21,6 +21,7 @@ import AnimatedBackground from "@/components/common/AnimatedBackground";
 import { useState } from "react";
 import Meta from "@/components/common/Meta";
 import { useLocation } from "wouter";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function Router() {
   const [location] = useLocation();
@@ -128,6 +129,10 @@ function Router() {
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  const contentMarginClass = isMobile ? "ml-0" : (sidebarCollapsed ? "ml-16" : "ml-64");
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -137,12 +142,15 @@ function App() {
           
           <div className="flex">
             <Sidebar 
-              collapsed={sidebarCollapsed} 
-              onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+              collapsed={sidebarCollapsed}
+              onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+              isMobile={isMobile}
+              isOpen={isMobile ? mobileSidebarOpen : undefined}
+              onClose={isMobile ? () => setMobileSidebarOpen(false) : undefined}
             />
             
-            <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-              <Header />
+            <div className={`flex-1 transition-all duration-300 ${contentMarginClass}`}>
+              <Header onMenuClick={isMobile ? () => setMobileSidebarOpen(true) : undefined} />
               
               <main className="p-6">
                 <Router />
