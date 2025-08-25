@@ -158,7 +158,7 @@ const Sidebar = ({ collapsed, onToggle, isMobile = false, isOpen = false, onClos
             onClick={onToggle}
             size="sm"
             variant="ghost"
-            className="mb-4 self-start p-2"
+            className={cn("mb-4 self-start p-2", isMobile && "hidden")}
             data-testid="sidebar-toggle"
           >
             <i className={cn(
