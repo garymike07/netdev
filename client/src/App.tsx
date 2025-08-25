@@ -28,8 +28,8 @@ function Router() {
   const baseUrl = (window as any).PUBLIC_BASE_URL || window.location.origin;
   const routeToMeta: Record<string, { title: string; description: string; path: string; social?: { image?: string; twitterCard?: string } }> = {
     "/": {
-      title: "Network Tools Dashboard",
-      description: "Monitor, test, and analyze networks with a suite of fast tools.",
+      title: "Mike dev tools",
+      description: "Professional network utilities: ping, port scan, DNS, whois, SSL, speed test, subnet and more.",
       path: "/",
     },
     "/ping": {
@@ -95,7 +95,7 @@ function Router() {
   };
 
   const meta = routeToMeta[location] || {
-    title: "Page Not Found — Network Tools Dashboard",
+    title: "Page Not Found — Mike dev tools",
     description: "The requested page could not be found.",
     path: location,
   };

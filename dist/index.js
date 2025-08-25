@@ -320,19 +320,32 @@ async function registerRoutes(app2) {
   app2.post("/api/tools/ping", async (req, res) => {
     try {
       const { host, count = 4, timeout = 5e3 } = req.body;
-      const results = [];
-      for (let i = 1; i <= count; i++) {
-        const time = Math.floor(Math.random() * 50) + 10;
-        results.push({
-          sequence: i,
-          host,
-          time,
-          ttl: 64,
-          bytes: 32
-        });
-        await new Promise((resolve) => setTimeout(resolve, 200));
+      if (!host || typeof host !== "string") {
+        return res.status(400).json({ message: "host is required" });
       }
-      const avgTime = Math.floor(results.reduce((sum, r) => sum + r.time, 0) / results.length);
+      const { execFile } = await import("child_process");
+      const { promisify } = await import("util");
+      const execFileAsync = promisify(execFile);
+      const isWindows = process.platform === "win32";
+      const args = isWindows ? ["-n", String(count), host] : ["-c", String(count), "-w", String(Math.ceil(timeout / 1e3)), host];
+      const start = Date.now();
+      const { stdout } = await execFileAsync("ping", args, { timeout });
+      const lines = stdout.split("\n").filter(Boolean);
+      const pingLines = lines.filter((l) => /time[=<]/i.test(l) || /Average/i.test(l));
+      const results = pingLines.filter((l) => /time[=<]/i.test(l)).map((line, idx) => {
+        const timeMatch = line.match(/time[=<]([0-9.]+)/i);
+        const ttlMatch = line.match(/ttl=([0-9]+)/i);
+        const bytesMatch = line.match(/bytes=([0-9]+)/i);
+        return {
+          sequence: idx + 1,
+          host,
+          time: timeMatch ? Number(timeMatch[1]) : null,
+          ttl: ttlMatch ? Number(ttlMatch[1]) : null,
+          bytes: bytesMatch ? Number(bytesMatch[1]) : null
+        };
+      });
+      const times = results.map((r) => r.time || 0).filter((n) => n > 0);
+      const avgTime = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
       const toolResult = await storage.createToolResult({
         toolName: "ping",
         parameters: { host, count, timeout },
@@ -340,16 +353,16 @@ async function registerRoutes(app2) {
           pings: results,
           statistics: {
             sent: count,
-            received: count,
-            lost: 0,
-            lossPercent: 0,
+            received: results.length,
+            lost: Math.max(0, count - results.length),
+            lossPercent: Math.max(0, Math.round((count - results.length) / count * 100)),
             avgTime,
-            minTime: Math.min(...results.map((r) => r.time)),
-            maxTime: Math.max(...results.map((r) => r.time))
+            minTime: times.length ? Math.min(...times) : null,
+            maxTime: times.length ? Math.max(...times) : null
           }
         },
         status: "completed",
-        executionTime: count * 200
+        executionTime: Date.now() - start
       });
       res.json(toolResult);
     } catch (error) {
@@ -359,11 +372,46 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/tools/port-scan", async (req, res) => {
     try {
-      const { host, startPort = 1, endPort = 1e3, scanType = "tcp" } = req.body;
-      const commonPorts = [22, 23, 53, 80, 110, 143, 443, 993, 995, 3389, 8080, 8443];
-      const openPorts = commonPorts.filter(
-        (port) => port >= startPort && port <= endPort && Math.random() > 0.7
-      );
+      const { host, startPort = 1, endPort = 1e3 } = req.body;
+      if (!host) return res.status(400).json({ message: "host is required" });
+      if (startPort < 1 || endPort > 65535 || startPort > endPort) {
+        return res.status(400).json({ message: "invalid port range" });
+      }
+      const net = await import("net");
+      const concurrency = 200;
+      const ports = Array.from({ length: endPort - startPort + 1 }, (_, i) => startPort + i);
+      const startTime = Date.now();
+      const openPorts = [];
+      const tryConnect = (port) => new Promise((resolve) => {
+        const socket = new net.Socket();
+        let done = false;
+        const timeout = setTimeout(() => {
+          if (!done) {
+            done = true;
+            socket.destroy();
+            resolve();
+          }
+        }, 750);
+        socket.once("connect", () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timeout);
+            openPorts.push({ port });
+            socket.destroy();
+            resolve();
+          }
+        }).once("error", () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timeout);
+            resolve();
+          }
+        }).connect(port, host);
+      });
+      for (let i = 0; i < ports.length; i += concurrency) {
+        const batch = ports.slice(i, i + concurrency);
+        await Promise.all(batch.map(tryConnect));
+      }
       const serviceMap = {
         22: "SSH",
         23: "Telnet",
@@ -378,15 +426,15 @@ async function registerRoutes(app2) {
         8080: "HTTP-Alt",
         8443: "HTTPS-Alt"
       };
-      const results = openPorts.map((port) => ({
+      const results = openPorts.map(({ port }) => ({
         port,
-        protocol: scanType.toUpperCase(),
+        protocol: "TCP",
         state: "open",
-        service: serviceMap[port] || "Unknown"
+        service: serviceMap[port] || null
       }));
       const toolResult = await storage.createToolResult({
         toolName: "port-scan",
-        parameters: { host, startPort, endPort, scanType },
+        parameters: { host, startPort, endPort },
         results: {
           host,
           openPorts: results,
@@ -394,7 +442,7 @@ async function registerRoutes(app2) {
           openCount: results.length
         },
         status: "completed",
-        executionTime: 3e3
+        executionTime: Date.now() - startTime
       });
       res.json(toolResult);
     } catch (error) {
@@ -404,30 +452,46 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/tools/dns-lookup", async (req, res) => {
     try {
-      const { domain, recordType = "A", dnsServer } = req.body;
-      const mockRecords = {
-        "A": ["93.184.216.34", "192.0.2.1"],
-        "AAAA": ["2606:2800:220:1:248:1893:25c8:1946"],
-        "MX": [{ priority: 10, exchange: `mail.${domain}` }],
-        "TXT": [`v=spf1 include:_spf.google.com ~all`, `google-site-verification=abc123`],
-        "CNAME": [domain.includes("www") ? domain.replace("www.", "") : `www.${domain}`],
-        "NS": [`ns1.${domain}`, `ns2.${domain}`]
-      };
-      const records = mockRecords[recordType] || [];
-      const queryTime = Math.floor(Math.random() * 100) + 10;
+      const { domain, recordType = "A" } = req.body;
+      if (!domain) return res.status(400).json({ message: "domain is required" });
+      const dns = await import("node:dns");
+      const resolver = dns.promises;
+      const startTime = Date.now();
+      let records = [];
+      switch (recordType) {
+        case "A":
+          records = await resolver.resolve4(domain);
+          break;
+        case "AAAA":
+          records = await resolver.resolve6(domain);
+          break;
+        case "MX":
+          records = await resolver.resolveMx(domain);
+          break;
+        case "TXT":
+          records = await resolver.resolveTxt(domain);
+          break;
+        case "CNAME":
+          records = await resolver.resolveCname(domain);
+          break;
+        case "NS":
+          records = await resolver.resolveNs(domain);
+          break;
+        case "SRV":
+          records = await resolver.resolveSrv(domain);
+          break;
+        case "SOA":
+          records = await resolver.resolveSoa(domain);
+          break;
+        default:
+          return res.status(400).json({ message: `unsupported recordType ${recordType}` });
+      }
       const toolResult = await storage.createToolResult({
         toolName: "dns-lookup",
-        parameters: { domain, recordType, dnsServer },
-        results: {
-          domain,
-          recordType,
-          records,
-          queryTime,
-          server: dnsServer || "8.8.8.8",
-          status: records.length > 0 ? "NOERROR" : "NXDOMAIN"
-        },
+        parameters: { domain, recordType },
+        results: { domain, recordType, records },
         status: "completed",
-        executionTime: queryTime
+        executionTime: Date.now() - startTime
       });
       res.json(toolResult);
     } catch (error) {
@@ -464,31 +528,53 @@ async function registerRoutes(app2) {
   app2.post("/api/tools/ssl-analyze", async (req, res) => {
     try {
       const { url, port = 443 } = req.body;
+      if (!url) return res.status(400).json({ message: "url is required" });
       const hostname = new URL(url).hostname;
+      const tls = await import("tls");
+      const start = Date.now();
+      const result = await new Promise((resolve, reject) => {
+        const socket = tls.connect({
+          host: hostname,
+          port,
+          servername: hostname,
+          rejectUnauthorized: false,
+          timeout: 8e3
+        }, () => {
+          try {
+            const cert2 = socket.getPeerCertificate(true);
+            const protocol2 = socket.getProtocol();
+            const cipher2 = socket.getCipher();
+            socket.end();
+            resolve({ cert: cert2, protocol: protocol2, cipher: cipher2 });
+          } catch (e) {
+            socket.end();
+            reject(e);
+          }
+        });
+        socket.on("error", reject);
+        socket.on("timeout", () => {
+          socket.destroy(new Error("TLS timeout"));
+        });
+      });
+      const { cert, protocol, cipher } = result;
       const sslResult = {
         hostname,
         port,
-        valid: Math.random() > 0.2,
-        issuer: "DigiCert Inc",
-        subject: hostname,
-        validFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3).toISOString(),
-        validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString(),
-        keySize: 2048,
-        signatureAlgorithm: "SHA256-RSA",
-        protocol: "TLSv1.3",
-        cipherSuite: "TLS_AES_256_GCM_SHA384",
-        grade: Math.random() > 0.3 ? "A" : "B",
+        valid: Boolean(cert && cert.valid_to && new Date(cert.valid_to) > /* @__PURE__ */ new Date()),
+        issuer: cert?.issuer?.O || cert?.issuerCertificate?.subject?.O || null,
+        subject: cert?.subject?.CN || hostname,
+        validFrom: cert?.valid_from ? new Date(cert.valid_from).toISOString() : null,
+        validTo: cert?.valid_to ? new Date(cert.valid_to).toISOString() : null,
+        protocol: protocol || null,
+        cipherSuite: cipher?.name || null,
         warnings: []
       };
-      if (!sslResult.valid) {
-        sslResult.warnings.push("Certificate has expired or is not yet valid");
-      }
       const toolResult = await storage.createToolResult({
         toolName: "ssl-analyze",
         parameters: { url, port },
         results: sslResult,
         status: "completed",
-        executionTime: 2e3
+        executionTime: Date.now() - start
       });
       res.json(toolResult);
     } catch (error) {
@@ -534,38 +620,17 @@ async function registerRoutes(app2) {
   app2.post("/api/tools/whois-lookup", async (req, res) => {
     try {
       const { domain } = req.body;
-      const mockWhoisData = {
-        domain,
-        registrar: "Example Registrar Inc.",
-        registrant: {
-          name: "John Smith",
-          organization: "Example Corp",
-          email: `admin@${domain}`,
-          country: "United States"
-        },
-        admin: {
-          name: "Admin Contact",
-          email: `admin@${domain}`
-        },
-        tech: {
-          name: "Technical Contact",
-          email: `tech@${domain}`
-        },
-        dates: {
-          created: new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1e3).toISOString(),
-          updated: new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3).toISOString(),
-          expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString()
-        },
-        nameservers: [`ns1.${domain}`, `ns2.${domain}`, `ns3.${domain}`],
-        status: ["clientTransferProhibited", "clientUpdateProhibited"],
-        dnssec: Math.random() > 0.5
-      };
+      if (!domain) return res.status(400).json({ message: "domain is required" });
+      const whoisModule = await import("whois-json");
+      const whois = whoisModule && whoisModule.default ? whoisModule.default : whoisModule;
+      const start = Date.now();
+      const data = await whois(domain, { follow: 2, timeout: 1e4 });
       const toolResult = await storage.createToolResult({
         toolName: "whois-lookup",
         parameters: { domain },
-        results: mockWhoisData,
+        results: data,
         status: "completed",
-        executionTime: 1500
+        executionTime: Date.now() - start
       });
       res.json(toolResult);
     } catch (error) {

@@ -18,7 +18,7 @@ const Header = () => {
   
   const getPageInfo = (path: string) => {
     const routes = {
-      "/": { title: "Network Dashboard", description: "Real-time network monitoring and management" },
+      "/": { title: "Mike dev tools", description: "Professional network utilities suite" },
       "/ping": { title: "Ping Tool", description: "Test network connectivity and latency" },
       "/port-scanner": { title: "Port Scanner", description: "Scan for open ports and services" },
       "/dns-lookup": { title: "DNS Lookup", description: "Resolve domain names and IP addresses" },
@@ -32,8 +32,8 @@ const Header = () => {
     };
     
     return routes[path as keyof typeof routes] || { 
-      title: "Network Tools", 
-      description: "Professional network management platform" 
+      title: "Mike dev tools", 
+      description: "Professional network utilities suite" 
     };
   };
 

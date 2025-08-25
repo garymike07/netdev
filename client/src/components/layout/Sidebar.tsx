@@ -129,7 +129,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                 className="ml-3"
               >
                 <h1 className="text-xl font-bold gradient-text whitespace-nowrap">
-                  NetOps Pro
+                  Mike dev tools
                 </h1>
               </motion.div>
             )}
