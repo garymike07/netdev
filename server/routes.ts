@@ -514,6 +514,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SEO: robots.txt
+  app.get("/robots.txt", (_req, res) => {
+    const lines = [
+      "User-agent: *",
+      "Allow: /",
+      "Sitemap: /sitemap.xml",
+    ].join("\n");
+    res.header("Content-Type", "text/plain; charset=utf-8").send(lines);
+  });
+
+  // SEO: sitemap.xml
+  app.get("/sitemap.xml", (_req, res) => {
+    const baseUrl = process.env.PUBLIC_BASE_URL || "https://example.com";
+    const routes = [
+      "",
+      "ping",
+      "port-scanner",
+      "dns-lookup",
+      "speed-test",
+      "network-topology",
+      "ssl-analyzer",
+      "subnet-calculator",
+      "whois-lookup",
+      "vulnerability-scanner",
+      "bandwidth-monitor",
+    ];
+
+    const urlset = routes
+      .map((r) => {
+        const loc = r ? `${baseUrl}/${r}` : `${baseUrl}/`;
+        return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
+      })
+      .join("\n");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlset}\n</urlset>`;
+    res.header("Content-Type", "application/xml; charset=utf-8").send(xml);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
