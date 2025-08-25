@@ -516,10 +516,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
+    const baseUrl = process.env.PUBLIC_BASE_URL || "https://example.com";
     const lines = [
       "User-agent: *",
       "Allow: /",
-      "Sitemap: /sitemap.xml",
+      `Sitemap: ${baseUrl}/sitemap.xml`,
     ].join("\n");
     res
       .header("Content-Type", "text/plain; charset=utf-8")
@@ -547,7 +548,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const urlset = routes
       .map((r) => {
         const loc = r ? `${baseUrl}/${r}` : `${baseUrl}/`;
-        return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
+        const today = new Date().toISOString();
+        return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
       })
       .join("\n");
 

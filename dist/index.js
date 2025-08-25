@@ -674,10 +674,11 @@ async function registerRoutes(app2) {
     }
   });
   app2.get("/robots.txt", (_req, res) => {
+    const baseUrl = process.env.PUBLIC_BASE_URL || "https://example.com";
     const lines = [
       "User-agent: *",
       "Allow: /",
-      "Sitemap: /sitemap.xml"
+      `Sitemap: ${baseUrl}/sitemap.xml`
     ].join("\n");
     res.header("Content-Type", "text/plain; charset=utf-8").header("Cache-Control", "public, max-age=3600, stale-while-revalidate=600").send(lines);
   });
@@ -698,8 +699,10 @@ async function registerRoutes(app2) {
     ];
     const urlset = routes.map((r) => {
       const loc = r ? `${baseUrl}/${r}` : `${baseUrl}/`;
+      const today = (/* @__PURE__ */ new Date()).toISOString();
       return `  <url>
     <loc>${loc}</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>`;
