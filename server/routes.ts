@@ -521,7 +521,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       "Allow: /",
       "Sitemap: /sitemap.xml",
     ].join("\n");
-    res.header("Content-Type", "text/plain; charset=utf-8").send(lines);
+    res
+      .header("Content-Type", "text/plain; charset=utf-8")
+      .header("Cache-Control", "public, max-age=3600, stale-while-revalidate=600")
+      .send(lines);
   });
 
   // SEO: sitemap.xml
@@ -549,7 +552,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .join("\n");
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlset}\n</urlset>`;
-    res.header("Content-Type", "application/xml; charset=utf-8").send(xml);
+    res
+      .header("Content-Type", "application/xml; charset=utf-8")
+      .header("Cache-Control", "public, max-age=3600, stale-while-revalidate=600")
+      .send(xml);
   });
 
   const httpServer = createServer(app);

@@ -679,7 +679,7 @@ async function registerRoutes(app2) {
       "Allow: /",
       "Sitemap: /sitemap.xml"
     ].join("\n");
-    res.header("Content-Type", "text/plain; charset=utf-8").send(lines);
+    res.header("Content-Type", "text/plain; charset=utf-8").header("Cache-Control", "public, max-age=3600, stale-while-revalidate=600").send(lines);
   });
   app2.get("/sitemap.xml", (_req, res) => {
     const baseUrl = process.env.PUBLIC_BASE_URL || "https://example.com";
@@ -708,7 +708,7 @@ async function registerRoutes(app2) {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urlset}
 </urlset>`;
-    res.header("Content-Type", "application/xml; charset=utf-8").send(xml);
+    res.header("Content-Type", "application/xml; charset=utf-8").header("Cache-Control", "public, max-age=3600, stale-while-revalidate=600").send(xml);
   });
   const httpServer = createServer(app2);
   return httpServer;
