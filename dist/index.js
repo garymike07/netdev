@@ -820,6 +820,9 @@ var vite_config_default = defineConfig({
       strict: true,
       deny: ["**/.*"]
     }
+  },
+  define: {
+    "import.meta.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL || "")
   }
 });
 
