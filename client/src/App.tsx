@@ -18,7 +18,7 @@ import BandwidthMonitor from "@/pages/tools/BandwidthMonitor";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import AnimatedBackground from "@/components/common/AnimatedBackground";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Meta from "@/components/common/Meta";
 import { useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -134,6 +134,17 @@ function App() {
 
   const contentMarginClass = isMobile ? "ml-0" : (sidebarCollapsed ? "ml-16" : "ml-64");
 
+  // Lock scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isMobile && mobileSidebarOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isMobile, mobileSidebarOpen]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -152,7 +163,7 @@ function App() {
             <div className={`flex-1 transition-all duration-300 ${contentMarginClass}`}>
               <Header onMenuClick={isMobile ? () => setMobileSidebarOpen(true) : undefined} />
               
-              <main className="p-6">
+              <main className="p-4 md:p-6 lg:p-8">
                 <Router />
               </main>
             </div>
