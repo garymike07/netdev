@@ -11,9 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, Settings, LogOut, User } from "lucide-react";
+import { Bell, Settings, LogOut, User, Menu } from "lucide-react";
 
-const Header = () => {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+const Header = ({ onMenuClick }: HeaderProps) => {
   const [location] = useLocation();
   
   const getPageInfo = (path: string) => {
@@ -54,25 +58,37 @@ const Header = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
+          className="flex items-center gap-3"
         >
-          <h2 
-            className="text-2xl font-bold gradient-text animate-glow"
-            data-testid="page-title"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            aria-label="Open menu"
+            onClick={onMenuClick}
           >
-            {pageInfo.title}
-          </h2>
-          <p 
-            className="text-muted-foreground mt-1"
-            data-testid="page-description"
-          >
-            {pageInfo.description}
-          </p>
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div>
+            <h2 
+              className="text-2xl font-bold gradient-text animate-glow"
+              data-testid="page-title"
+            >
+              {pageInfo.title}
+            </h2>
+            <p 
+              className="text-muted-foreground mt-1"
+              data-testid="page-description"
+            >
+              {pageInfo.description}
+            </p>
+          </div>
         </motion.div>
         
         <div className="flex items-center space-x-4">
           {/* Network Status */}
           <motion.div
-            className="flex items-center space-x-2"
+            className="hidden sm:flex items-center space-x-2"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2, duration: 0.3 }}
